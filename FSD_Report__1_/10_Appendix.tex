@@ -1,0 +1,207 @@
+\chapter{APPENDIX}
+
+\section{Minimum Software Requirements}
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabular}{|p{4cm}|p{9cm}|}
+        \hline
+        \textbf{Requirement} & \textbf{Specification} \\
+        \hline
+        Operating System & Windows 10/11, macOS 11+, or Linux (Ubuntu 20.04+) \\
+        \hline
+        Web Browser & Modern browser with ES6+ support (Chrome 90+, Firefox 88+, Edge 90+, Safari 14+) \\
+        \hline
+        Node.js Runtime & Version 16+ (18 LTS recommended) for local development \\
+        \hline
+        npm & Version 8+ (bundled with Node.js) \\
+        \hline
+        Git & Version 2.30+ for version control \\
+        \hline
+        Internet Connection & Required for API calls (geocoding, weather, places) and MongoDB Atlas \\
+        \hline
+    \end{tabular}
+    \caption{Minimum Software Requirements}
+    \label{tab:sw_req}
+\end{table}
+
+\section{Minimum Hardware Requirements}
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabular}{|p{4cm}|p{9cm}|}
+        \hline
+        \textbf{Component} & \textbf{Specification} \\
+        \hline
+        Processor & Dual-core CPU (Intel i3/Ryzen 3 minimum; i5/Ryzen 5 recommended) \\
+        \hline
+        RAM & 4 GB minimum (8 GB recommended for running frontend and backend concurrently) \\
+        \hline
+        Storage & 200 MB free space for application code and node\_modules \\
+        \hline
+        Display & 1366$\times$768 minimum (1920$\times$1080 recommended for optimal UI experience) \\
+        \hline
+        Network & Broadband internet (minimum 2 Mbps; 5 Mbps recommended) \\
+        \hline
+    \end{tabular}
+    \caption{Minimum Hardware Requirements}
+    \label{tab:hw_req}
+\end{table}
+
+\section{Key Code Snippets}
+
+\subsection{Haversine Distance Calculation}
+The following JavaScript function calculates the great-circle distance between two geographic coordinates:
+\begin{lstlisting}[style=csharpstyle]
+export const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Earth radius in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(deg2rad(lat1)) *
+        Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
+};
+\end{lstlisting}
+
+\subsection{Nearest Neighbor Route Optimization}
+The core optimization algorithm that reorders stops for minimal travel distance:
+\begin{lstlisting}[style=csharpstyle]
+export const optimizeRoute = (stops) => {
+    if (!stops || stops.length < 2) return stops;
+    const points = [...stops];
+    const path = [points[0]]; // Start at first point
+    const unvisited = points.slice(1);
+    let currentPoint = points[0];
+    
+    while (unvisited.length > 0) {
+        let nearestIndex = -1;
+        let minDistance = Infinity;
+        for (let i = 0; i < unvisited.length; i++) {
+            const dist = calculateDistance(
+                currentPoint.lat, currentPoint.lng,
+                unvisited[i].lat, unvisited[i].lng
+            );
+            if (dist < minDistance) {
+                minDistance = dist;
+                nearestIndex = i;
+            }
+        }
+        if (nearestIndex !== -1) {
+            path.push(unvisited[nearestIndex]);
+            currentPoint = unvisited[nearestIndex];
+            unvisited.splice(nearestIndex, 1);
+        }
+    }
+    return path;
+};
+\end{lstlisting}
+
+\subsection{JWT Authentication Middleware}
+Server-side middleware that protects API endpoints:
+\begin{lstlisting}[style=csharpstyle]
+const auth = (req, res, next) => {
+    const token = req.header('Authorization')
+                     ?.replace('Bearer ', '');
+    if (!token) {
+        return res.status(401)
+            .json({ message: 'No token, access denied' });
+    }
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (error) {
+        res.status(401)
+           .json({ message: 'Token is invalid' });
+    }
+};
+\end{lstlisting}
+
+\subsection{Overpass QL Query for Nearby Hotels}
+The spatial query sent to OpenStreetMap's Overpass API:
+\begin{lstlisting}[style=csharpstyle]
+const query = `
+    [out:json][timeout:30];
+    (
+      nwr["tourism"~"hotel|hostel|guest_house
+           |apartment|motel"]
+           (around:10000, ${lat}, ${lng});
+      nwr["amenity"~"hotel|hostel"]
+           (around:10000, ${lat}, ${lng});
+    );
+    out center 30;
+`;
+\end{lstlisting}
+
+\section{External API Reference}
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.4}
+    \small
+    \begin{tabular}{|p{2.5cm}|p{4cm}|p{3cm}|p{3cm}|}
+        \hline
+        \textbf{API} & \textbf{Endpoint} & \textbf{Auth Required} & \textbf{Rate Limit} \\
+        \hline
+        Photon (Komoot) & photon.komoot.io/api/ & None & 100 req/min \\
+        \hline
+        Open-Meteo & api.open-meteo.com/v1/forecast & None & 10,000 req/day \\
+        \hline
+        Overpass (OSM) & overpass-api.de/api/interpreter & None & Best effort \\
+        \hline
+    \end{tabular}
+    \caption{External API Reference}
+    \label{tab:api_ref}
+\end{table}
+
+\section{Glossary}
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \small
+    \begin{tabular}{|p{3.5cm}|p{9.5cm}|}
+        \hline
+        \textbf{Term} & \textbf{Definition} \\
+        \hline
+        API & Application Programming Interface -- a set of protocols for building and interacting with software applications \\
+        \hline
+        bcrypt & An adaptive cryptographic hash function used for password hashing \\
+        \hline
+        CDN & Content Delivery Network -- a distributed server system that delivers web content based on user proximity \\
+        \hline
+        CORS & Cross-Origin Resource Sharing -- a browser security mechanism for controlled access to resources on different domains \\
+        \hline
+        CRUD & Create, Read, Update, Delete -- the four basic database operations \\
+        \hline
+        Glassmorphism & A UI design trend using frosted-glass visual effects \\
+        \hline
+        Haversine & A trigonometric formula for calculating great-circle distances on a sphere \\
+        \hline
+        HMR & Hot Module Replacement -- a development feature that updates modules in the browser without a full page reload \\
+        \hline
+        JWT & JSON Web Token -- an open standard for secure information transmission \\
+        \hline
+        MERN & MongoDB, Express.js, React, Node.js -- a JavaScript full-stack technology combination \\
+        \hline
+        NoSQL & A non-relational database approach that stores data in flexible formats \\
+        \hline
+        ODM & Object Document Mapper -- a library (e.g., Mongoose) that maps objects to database documents \\
+        \hline
+        OSM & OpenStreetMap -- a collaborative open-source mapping project \\
+        \hline
+        REST & Representational State Transfer -- an architectural style for web services \\
+        \hline
+        SPA & Single Page Application -- a web application that loads a single HTML page and dynamically updates content \\
+        \hline
+        TSP & Traveling Salesperson Problem -- an optimization problem seeking the shortest route visiting all cities \\
+        \hline
+        WMO & World Meteorological Organization -- the UN agency that standardizes weather codes \\
+        \hline
+    \end{tabular}
+    \caption{Glossary of Terms}
+    \label{tab:glossary}
+\end{table}

@@ -1,0 +1,269 @@
+\chapter{SYSTEM ANALYSIS}
+This chapter presents a detailed analysis of the Route Optimizer system, examining its modular architecture, business rules, technical feasibility, and the roles of its actors. A thorough system analysis ensures that the design and implementation phases are grounded in a clear understanding of the application's requirements and constraints.
+
+\section{Module Description}
+The Route Optimizer (RouteWise) platform is composed of several tightly integrated modules that work together to provide a comprehensive travel planning experience. Each module encapsulates a specific area of functionality and communicates with other modules through well-defined interfaces.
+
+\subsection{Authentication and Profile Module}
+This module handles the complete user lifecycle---registration, secure login, and session management. The implementation uses industry-standard security practices:
+\begin{itemize}
+    \item \textbf{User Registration (\texttt{POST /api/auth/register}):} Accepts a username, email, and password. The email is enforced as unique (case-insensitive) to prevent duplicate accounts. Passwords must be at least 6 characters long. Upon successful registration, a JWT token is generated and returned immediately, allowing the user to proceed without a separate login step.
+    \item \textbf{Password Security:} Before saving to the database, passwords are hashed using bcrypt with 10 salt rounds via a Mongoose \texttt{pre('save')} middleware hook. This ensures that even if the database is compromised, raw passwords are never exposed.
+    \item \textbf{User Login (\texttt{POST /api/auth/login}):} Validates credentials by looking up the user by email and comparing the submitted password against the stored bcrypt hash using the \texttt{comparePassword} instance method on the User model.
+    \item \textbf{JWT Token Generation:} Upon successful authentication, a JWT is generated encoding the user's ID, name, and email with a 7-day expiration. This token is stored client-side and included in the \texttt{Authorization} header of subsequent API requests.
+    \item \textbf{Authentication Middleware:} A reusable middleware function intercepts protected API routes, verifies the JWT signature, and attaches the decoded user information to the request object for downstream use.
+\end{itemize}
+
+\subsection{Route Planning and Stop Management}
+This module provides the primary interface for users to build their travel itinerary. Key components include:
+\begin{itemize}
+    \item \textbf{SpotForm Component:} An interactive search interface powered by the Photon geocoding API. Users type a location name, and the system provides up to 15 autocomplete suggestions with structured address data (name, street, city, state, country). The search supports AbortController-based request cancellation to prevent race conditions from rapid typing.
+    \item \textbf{SpotList Component:} Displays all added stops in a visually rich list with individual cards showing the stop name, geographic coordinates, and action buttons for reordering or removal. This component manages the ordered list that is subsequently fed into the optimization engine.
+    \item \textbf{Coordinate Capture:} For each selected location, the system captures latitude and longitude from the Photon API response (\texttt{geometry.coordinates[1]} for latitude, \texttt{geometry.coordinates[0]} for longitude) and stores them alongside the display name.
+\end{itemize}
+
+\subsection{Route Optimization Engine}
+The core computational module implements the Nearest Neighbor algorithm for solving the Traveling Salesperson Problem (TSP). The engine is implemented entirely on the client side in the \texttt{optimizer.js} utility module:
+\begin{itemize}
+    \item \textbf{Haversine Distance Calculator (\texttt{calculateDistance}):} Converts latitude and longitude from degrees to radians and applies the Haversine formula using Earth's mean radius of 6,371 km to compute the great-circle distance between any two coordinates.
+    \item \textbf{Route Optimizer (\texttt{optimizeRoute}):} Accepts an array of stop objects, designates the first stop as the starting point, and iteratively selects the nearest unvisited stop. The algorithm produces an open path (A $\rightarrow$ B $\rightarrow$ C $\rightarrow$ ... $\rightarrow$ End) rather than a closed loop, which is more appropriate for road trip planning where the traveler typically does not return to the starting point.
+    \item \textbf{Total Distance Calculator (\texttt{calculateTotalDistance}):} Iterates over the optimized route and sums the pairwise Haversine distances between consecutive stops to produce the total trip distance in kilometers.
+    \item \textbf{Fuel Cost Estimator (\texttt{estimateFuelCost}):} Calculates the estimated fuel expenditure using the formula: $\text{Cost} = \frac{\text{Distance}}{\text{Mileage}} \times \text{Fuel Price}$, where distance is in kilometers, mileage is in km/litre, and fuel price is in the user's local currency per litre.
+\end{itemize}
+
+\subsection{Data Enrichment Module}
+This module fetches real-time metadata for each stop in the itinerary, providing contextual information that enhances trip planning decisions:
+\begin{itemize}
+    \item \textbf{Weather Fetching (\texttt{weather.js}):} Calls the Open-Meteo API with latitude and longitude parameters to retrieve the current temperature (\texttt{temperature\_2m}) and WMO weather code (\texttt{weather\_code}). The module includes a comprehensive mapping of all WMO codes (0--99) to human-readable descriptions and weather emojis for intuitive visual display.
+    \item \textbf{Nearby Hotels (\texttt{places.js --- getNearbyPlaces}):} Constructs an Overpass QL query that searches for accommodations tagged as \texttt{tourism=hotel|hostel|guest\_house|apartment|motel} or \texttt{amenity=hotel|hostel} within a 10 km radius. Results are filtered to include only named places and limited to 30 entries.
+    \item \textbf{Nearby Fuel Stations (\texttt{places.js --- getNearbyFuelStations}):} Queries for nodes tagged with \texttt{amenity=fuel} within a 15 km radius, returning up to 50 results including unnamed stations (labeled as ``Petrol Station'').
+\end{itemize}
+
+\subsection{Travel Metrics and Cost Estimation}
+The FuelSettings component provides a dedicated interface for travel cost planning:
+\begin{itemize}
+    \item Users input their vehicle's fuel efficiency (mileage in km/litre) and the current fuel price per litre.
+    \item The system instantly calculates total distance, estimated travel time (based on an assumed average speed), and projected fuel costs.
+    \item This module serves as a financial planning tool, helping travelers budget their trip expenses before departing.
+\end{itemize}
+
+\subsection{Immersive Map Visualization}
+The MapPreview component integrates an interactive map interface:
+\begin{itemize}
+    \item Visualizes all planned stops as markers on an embedded map.
+    \item Draws the optimized route path connecting the stops in their calculated order.
+    \item Provides spatial context for the trip, allowing users to assess geographic coverage and identify potential detours.
+    \item Supports zoom and pan interactions for detailed exploration of specific segments of the journey.
+\end{itemize}
+
+\subsection{Trip Dashboard}
+The TripDashboard component provides a personalized management interface:
+\begin{itemize}
+    \item Displays all saved itineraries for the logged-in user, sorted by creation date (newest first).
+    \item Each saved route card shows the trip name, date, number of stops, total distance, and estimated cost.
+    \item Users can load a saved route to view its full details or delete routes they no longer need.
+    \item The dashboard fetches data from the \texttt{GET /api/routes} endpoint, which is protected by authentication middleware.
+\end{itemize}
+
+\section{Business Rules}
+Business rules for Route Optimizer define the logic and constraints that ensure accurate itinerary generation and a secure, premium user experience.
+
+\subsection{Authentication and Data Privacy}
+\begin{itemize}
+    \item Users must be authenticated (valid JWT token) to access any route management functionality, including saving, loading, or deleting routes.
+    \item Email addresses are stored in lowercase and enforced as unique across the system to prevent duplicate registrations.
+    \item Passwords must be at least 6 characters and are never stored in plain text; they are hashed using bcrypt before database insertion.
+    \item Route data is strictly isolated by user: the \texttt{userId} field in every route document links it to the authenticated user, and queries filter by this field to prevent cross-user data access.
+    \item JWT tokens expire after 7 days, after which the user must re-authenticate.
+\end{itemize}
+
+\subsection{Route Optimization Logic}
+\begin{itemize}
+    \item Optimization requires at least two stops (a starting point and at least one destination). If fewer than two stops are provided, the original input is returned unchanged.
+    \item The first stop added by the user is always treated as the starting location for the optimization sequence.
+    \item Distances are calculated using the Haversine formula to account for the Earth's curvature, ensuring accuracy for both short and long-distance travel.
+    \item The optimization produces an open path (no return to origin), suitable for road trips where the traveler proceeds to a final destination.
+    \item Fuel cost estimates require non-zero, positive values for vehicle mileage to prevent division-by-zero errors.
+\end{itemize}
+
+\subsection{API Integration and Rate Limiting}
+\begin{itemize}
+    \item Geocoding queries via the Photon API return a maximum of 15 results per request.
+    \item Weather data is fetched per-stop using individual API calls to Open-Meteo with automatic timezone detection (\texttt{timezone=auto}).
+    \item Hotel searches are bounded to a 10 km radius with a maximum of 30 results.
+    \item Fuel station searches use a larger 15 km radius with a maximum of 50 results to ensure adequate coverage in rural areas.
+    \item Overpass API queries have a 30-second timeout to prevent hanging requests.
+    \item The system gracefully handles API failures by catching exceptions and returning \texttt{null} or empty arrays, ensuring the core functionality (route optimization) continues to work even when enrichment data is unavailable.
+\end{itemize}
+
+\newpage
+\section{Analysis of Architecture}
+{\large \textbf{MERN Stack Architecture}}\\\\
+Route Optimizer is built using the MERN stack (MongoDB, Express, React, Node.js), which provides a robust, scalable, and efficient environment for modern web applications. The entire application uses JavaScript/ES6+ across all layers, enabling code reuse and a unified development experience.\\\\
+\begin{enumerate}
+    \item \textbf{Frontend (React and Vite):}
+    \begin{itemize}
+        \item A highly responsive single-page application (SPA) built with React 18+.
+        \item Uses Vite as the build tool for ultra-fast HMR (Hot Module Replacement) during development and optimized production builds with tree-shaking and code splitting.
+        \item Features a premium, glassmorphic UI design with immersive animated background blobs using CSS animations.
+        \item Component architecture organized into three categories: \texttt{common/} (reusable Button and Input components with dedicated CSS), \texttt{dashboard/} (SpotForm, SpotList, RouteResult, MapPreview, FuelSettings, SavedRoutes, TripDashboard), and \texttt{layout/} (page-level layout wrappers).
+        \item State management uses React Context API for global authentication state and local component state via \texttt{useState} hooks.
+        \item Utility modules (\texttt{utils/}) encapsulate all external API interactions and algorithmic logic, keeping components focused on presentation.
+    \end{itemize}
+    \item \textbf{Backend (Node.js and Express):}
+    \begin{itemize}
+        \item A RESTful API built with Express.js using ES module syntax (\texttt{import/export}).
+        \item API routes are organized into two route files: \texttt{auth.js} (registration and login) and \texttt{routes.js} (CRUD operations for saved itineraries).
+        \item Middleware stack includes: \texttt{cors()} for cross-origin request handling, \texttt{express.json()} for JSON body parsing, and a custom JWT authentication middleware for protecting route endpoints.
+        \item Environment configuration managed through \texttt{dotenv} for secure handling of database URIs and JWT secrets.
+        \item Health check endpoint (\texttt{GET /api/health}) for monitoring server availability.
+    \end{itemize}
+    \item \textbf{Database (MongoDB Atlas):}
+    \begin{itemize}
+        \item Cloud-hosted NoSQL database using MongoDB Atlas managed clusters.
+        \item Two primary collections: \texttt{users} (with fields: name, email, password hash, timestamps) and \texttt{routes} (with fields: userId, name, date, stops array, metrics object, summary fields, timestamps).
+        \item Mongoose ODM (Object Document Mapper) provides schema validation, middleware hooks (password hashing), and instance methods (password comparison).
+        \item Routes are indexed by \texttt{userId} for efficient retrieval and sorted by \texttt{createdAt} descending for reverse-chronological display.
+    \end{itemize}
+    \item \textbf{External API Integrations:}
+    \begin{itemize}
+        \item \textbf{Photon API (Komoot):} Free, open-source geocoding with OpenStreetMap data. No API key required.
+        \item \textbf{Open-Meteo:} Free weather forecast API providing current conditions without authentication. Supports automatic timezone detection.
+        \item \textbf{Overpass API (OpenStreetMap):} Rich geospatial querying for nearby points of interest using Overpass QL. Free and open-source.
+    \end{itemize}
+\end{enumerate}
+
+\section{Feasibility Analysis}
+
+\subsection{Technical Feasibility}
+The Route Optimizer is highly feasible from a technical standpoint. The MERN stack is a mature and extensively documented technology ecosystem, backed by large open-source communities and corporate support (React by Meta, Node.js by the OpenJS Foundation, MongoDB by MongoDB Inc.). All dependencies are available as well-maintained npm packages.
+
+The Haversine formula and Nearest Neighbor algorithm are well-understood mathematical constructs that can be implemented reliably in JavaScript without external computational libraries. Client-side execution of the optimization ensures sub-second response times for typical road trips (up to 20--30 stops), eliminating the need for server-side computation resources.
+
+The three external APIs (Photon, Open-Meteo, and Overpass) are all free, open-source, and do not require API keys for non-commercial use, removing both cost barriers and complex credential management requirements. The use of standard HTTP/JSON protocols for API communication ensures broad compatibility and straightforward error handling.
+
+\subsection{Economic Feasibility}
+The project is economically viable as it relies entirely on open-source technologies and free-tier cloud services:
+\begin{itemize}
+    \item \textbf{Development Tools:} VS Code (free), Git/GitHub (free), Node.js and npm (free and open-source).
+    \item \textbf{Hosting:} MongoDB Atlas provides a free M0 Sandbox cluster (512 MB storage) suitable for development and small-scale production. Frontend hosting on Vercel/Netlify offers generous free tiers with global CDN distribution. Backend hosting on Render or Railway provides free hobby-tier instances.
+    \item \textbf{APIs:} Photon, Open-Meteo, and Overpass APIs are all free for non-commercial use.
+    \item \textbf{Hardware:} Standard consumer hardware (laptop with 8 GB RAM) is sufficient for development. No specialized computing infrastructure is required.
+\end{itemize}
+The total development and operational cost for a small-scale deployment is effectively zero, making this project suitable for academic and personal use cases.
+
+\subsection{Operational Feasibility}
+Operationally, the system is designed to be intuitive and requires no technical training for end-users. The familiar web application paradigm (browser-based access, form inputs, visual results) ensures immediate accessibility. Key operational considerations include:
+\begin{itemize}
+    \item The premium glassmorphic UI guides users through the planning process---adding stops, triggering optimization, reviewing results---in a logical, linear flow.
+    \item Automation of complex calculations (Haversine distances, cost estimation, weather lookup) provides immediate value without requiring users to understand the underlying mathematics.
+    \item Error handling and graceful degradation ensure the application remains functional even when individual API calls fail (e.g., weather data unavailable for a remote location).
+    \item The responsive design ensures usability across devices, from desktop monitors to tablets.
+\end{itemize}
+
+\section{System Environment}
+
+\subsection{Software Environment}
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabular}{|p{4cm}|p{9cm}|}
+        \hline
+        \textbf{Category} & \textbf{Technology} \\
+        \hline
+        Frontend Framework & React 18+ with Vite build tool \\
+        \hline
+        Backend Runtime & Node.js with Express.js framework \\
+        \hline
+        Database & MongoDB Atlas (cloud-hosted NoSQL) \\
+        \hline
+        Authentication & JWT (jsonwebtoken) + bcryptjs \\
+        \hline
+        Geocoding API & Photon API (Komoot / OpenStreetMap) \\
+        \hline
+        Weather API & Open-Meteo Forecast API \\
+        \hline
+        Places API & Overpass API (OpenStreetMap) \\
+        \hline
+        Styling & Vanilla CSS with Glassmorphic design system \\
+        \hline
+        Icons & Lucide-React icon library \\
+        \hline
+        HTTP Client & Native Fetch API (browser) \\
+        \hline
+        Version Control & Git with GitHub hosting \\
+        \hline
+        Package Manager & npm (Node Package Manager) \\
+        \hline
+    \end{tabular}
+    \caption{Software Environment for Route Optimizer}
+    \label{tab:software_env}
+\end{table}
+
+\subsection{Hardware Environment}
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabular}{|p{4cm}|p{9cm}|}
+        \hline
+        \textbf{Component} & \textbf{Specification} \\
+        \hline
+        Processor & Intel i5 (8th Gen) or equivalent (i7/Ryzen 5 recommended) \\
+        \hline
+        Memory (RAM) & 8 GB minimum (16 GB recommended for concurrent dev servers) \\
+        \hline
+        Storage & SSD recommended for faster npm installs and Vite builds \\
+        \hline
+        Display & 1920$\times$1080 (Full HD) or higher for optimal UI testing \\
+        \hline
+        Network & Broadband internet connection (minimum 5 Mbps for API calls) \\
+        \hline
+        Operating System & Windows 10/11, macOS 11+, or Ubuntu 20.04+ \\
+        \hline
+    \end{tabular}
+    \caption{Hardware Environment for Route Optimizer}
+    \label{tab:hardware_env}
+\end{table}
+
+\newpage
+\section{Actors and Roles}
+The system involves two primary actor roles with distinct levels of access and functionality.
+
+\subsection{Registered User}
+A registered user is an individual who has created an account through the registration process. This actor has full access to all features of the Route Optimizer:
+\begin{itemize}
+    \item \textbf{Trip Planning:} Can add destinations using the geocoding search, view them in an ordered list, and trigger route optimization.
+    \item \textbf{Route Optimization:} Can execute the Nearest Neighbor optimization to determine the most efficient visiting order.
+    \item \textbf{Data Enrichment:} Can view real-time weather conditions, nearby hotels, and fuel stations for each destination.
+    \item \textbf{Cost Planning:} Can input vehicle mileage and fuel price to receive fuel cost estimates.
+    \item \textbf{Map Visualization:} Can view the optimized route on an interactive map with stop markers and connecting paths.
+    \item \textbf{Trip Persistence:} Can save optimized itineraries (with all enriched data) to the cloud database and retrieve them later through the Trip Dashboard.
+    \item \textbf{Trip Management:} Can view a history of saved trips, load previous itineraries for review, and delete trips that are no longer needed.
+\end{itemize}
+
+\subsection{Anonymous Guest}
+An anonymous guest is a visitor who has not registered or logged in. This actor has limited interaction with the system:
+\begin{itemize}
+    \item Can view the landing page with branding, project description, and feature highlights.
+    \item Can access the registration and login pages.
+    \item Cannot access the trip planning dashboard or any route-related functionality.
+    \item Is redirected to the login page if attempting to access protected routes.
+\end{itemize}
+
+\section{Data Flow Overview}
+The following describes the high-level data flow within the Route Optimizer system:
+\begin{enumerate}
+    \item The user enters a destination query in the SpotForm search bar.
+    \item The frontend sends an HTTP GET request to the Photon API with the search string.
+    \item Geocoding results (name, coordinates) are displayed as suggestions; the user selects one.
+    \item The selected stop (name, latitude, longitude) is added to the local stops array.
+    \item Steps 1--4 are repeated until all desired stops are added.
+    \item The user triggers the ``Optimize Route'' action.
+    \item The frontend's \texttt{optimizeRoute()} function applies the Nearest Neighbor algorithm to reorder the stops.
+    \item \texttt{calculateTotalDistance()} computes the total trip distance.
+    \item For each stop, the frontend concurrently fetches weather data (Open-Meteo), nearby hotels (Overpass), and nearby fuel stations (Overpass).
+    \item All results are assembled and displayed in the RouteResult component.
+    \item If authenticated, the user can save the itinerary by sending a POST request (with JWT) to \texttt{/api/routes}.
+    \item The backend validates the token, creates a Route document with all data, and stores it in MongoDB Atlas.
+    \item The user can later retrieve saved itineraries via the TripDashboard, which fetches from \texttt{GET /api/routes}.
+\end{enumerate}

@@ -1,0 +1,256 @@
+\chapter{TESTING}
+Testing is a fundamental phase in the development of the Route Optimizer, ensuring that the optimization algorithms are accurate, API integrations are resilient, and the user interface remains responsive and intuitive. Comprehensive testing helps identify edge cases in geographical calculations, potential failures in external data fetching, and security vulnerabilities in the authentication flow. This chapter describes the testing strategy employed across multiple levels: unit testing, integration testing, system testing, performance testing, and user acceptance testing.
+
+\section{Testing Strategy}
+The testing approach for Route Optimizer follows a layered pyramid model:
+\begin{enumerate}
+    \item \textbf{Unit Tests:} Validate individual utility functions and component logic in isolation.
+    \item \textbf{Integration Tests:} Verify correct interactions between frontend, backend, and external APIs.
+    \item \textbf{System Tests:} Evaluate end-to-end user journeys from registration through to itinerary saving.
+    \item \textbf{Performance Tests:} Measure response times and ensure the application meets responsiveness benchmarks.
+    \item \textbf{User Acceptance Tests (UAT):} Confirm that the application meets the user's expectations in real-world scenarios.
+\end{enumerate}
+
+\section{Unit Testing}
+Unit testing focuses on validating the logic of individual utility functions and React components in isolation. This includes verifying the Haversine distance calculations, the correctness of the Nearest Neighbor optimization path, fuel cost estimation logic, and weather code interpretation.
+
+\renewcommand{\arraystretch}{1.3}
+\begin{longtable}{|p{1.2cm}|p{2.5cm}|p{4cm}|p{4cm}|c|}
+    \hline
+    \textbf{Test ID} & \textbf{Component} & \textbf{Test Description} & \textbf{Expected Result} & \textbf{Status} \\
+    \hline
+    \endfirsthead
+    \hline
+    \textbf{Test ID} & \textbf{Component} & \textbf{Test Description} & \textbf{Expected Result} & \textbf{Status} \\
+    \hline
+    \endhead
+    \hline
+    \endfoot
+    \hline
+    \caption{Unit Test Cases for Route Optimizer} \label{tab:unit_tests} \\
+    \endlastfoot
+
+    UT01 & Haversine Formula & Calculate distance between Kochi (9.93, 76.27) and Munnar (10.09, 77.06) & Distance $\approx$ 88 km (within 5\% margin of reference) & Pass \\
+    \hline
+    UT02 & Haversine Formula & Calculate distance between identical coordinates (0 distance case) & Distance = 0.0 km & Pass \\
+    \hline
+    UT03 & Haversine Formula & Calculate distance between antipodal points & Distance $\approx$ 20,015 km (half Earth circumference) & Pass \\
+    \hline
+    UT04 & deg2rad Utility & Convert 180 degrees to radians & Result = $\pi$ (3.14159...) & Pass \\
+    \hline
+    UT05 & optimizeRoute & Optimize with 3 collinear stops (A=0,0; B=0,2; C=0,1) & Output order: A $\rightarrow$ C $\rightarrow$ B & Pass \\
+    \hline
+    UT06 & optimizeRoute & Pass single stop (edge case) & Return the same single-stop array unchanged & Pass \\
+    \hline
+    UT07 & optimizeRoute & Pass empty array & Return empty array without errors & Pass \\
+    \hline
+    UT08 & optimizeRoute & Pass null value & Return null without throwing & Pass \\
+    \hline
+    UT09 & calculateTotalDistance & Calculate total for known 3-stop route & Sum of pairwise Haversine distances matches reference & Pass \\
+    \hline
+    UT10 & estimateFuelCost & Distance=100km, mileage=15km/l, price=100/l & Cost = 666.67 & Pass \\
+    \hline
+    UT11 & estimateFuelCost & Mileage = 0 (edge case) & Cost = 0 (avoids division by zero) & Pass \\
+    \hline
+    UT12 & estimateFuelCost & Negative mileage (edge case) & Cost = 0 (guard against invalid input) & Pass \\
+    \hline
+    UT13 & getWeatherDescription & Pass WMO code 0 & Returns ``Clear sky'' & Pass \\
+    \hline
+    UT14 & getWeatherDescription & Pass WMO code 61 & Returns ``Slight rain'' & Pass \\
+    \hline
+    UT15 & getWeatherDescription & Pass unknown WMO code (e.g., 999) & Returns ``Unknown'' & Pass \\
+    \hline
+    UT16 & getWeatherEmoji & Pass WMO code 0 & Returns sun emoji & Pass \\
+    \hline
+    UT17 & getWeatherEmoji & Pass WMO code 95 & Returns thunderstorm emoji & Pass \\
+    \hline
+    UT18 & Auth Context & Call login handler with valid credentials & isAuthenticated becomes true, token stored & Pass \\
+    \hline
+    UT19 & Auth Context & Call logout handler & isAuthenticated becomes false, token cleared & Pass \\
+    \hline
+    UT20 & User Model & Create user with password ``test123'' & Saved password hash differs from plain text & Pass \\
+    \hline
+    UT21 & User Model & Call comparePassword with correct password & Returns true & Pass \\
+    \hline
+    UT22 & User Model & Call comparePassword with wrong password & Returns false & Pass \\
+    \hline
+\end{longtable}
+
+\section{Integration Testing}
+Integration testing verifies that the frontend, backend, and external APIs interact correctly. It ensures that data flows smoothly from the user input through the API layer to the database and back, and that external service integrations produce valid results.
+
+\begin{longtable}{|p{1.2cm}|p{2.5cm}|p{4cm}|p{4cm}|c|}
+    \hline
+    \textbf{Test ID} & \textbf{Component} & \textbf{Test Description} & \textbf{Expected Result} & \textbf{Status} \\
+    \hline
+    \endfirsthead
+    \hline
+    \textbf{Test ID} & \textbf{Component} & \textbf{Test Description} & \textbf{Expected Result} & \textbf{Status} \\
+    \hline
+    \endhead
+    \hline
+    \endfoot
+    \hline
+    \caption{Integration Test Cases for Route Optimizer} \label{tab:integration_tests} \\
+    \endlastfoot
+
+    IT01 & Auth API & POST /api/auth/register with valid data & 201 status, JWT token in response body & Pass \\
+    \hline
+    IT02 & Auth API & POST /api/auth/register with duplicate email & 400 status, ``User already exists'' message & Pass \\
+    \hline
+    IT03 & Auth API & POST /api/auth/login with valid credentials & 200 status, JWT token with user data returned & Pass \\
+    \hline
+    IT04 & Auth API & POST /api/auth/login with wrong password & 400 status, ``Invalid email or password'' message & Pass \\
+    \hline
+    IT05 & Route Save & POST /api/routes with valid JWT and route data & 201 status, saved route document returned with \_id & Pass \\
+    \hline
+    IT06 & Route Save & POST /api/routes without JWT header & 401 Unauthorized response & Pass \\
+    \hline
+    IT07 & Route Fetch & GET /api/routes with valid JWT & 200 status, array of user's routes (sorted by date desc) & Pass \\
+    \hline
+    IT08 & Route Delete & DELETE /api/routes/:id with valid JWT and owned route & 200 status, confirmation message & Pass \\
+    \hline
+    IT09 & Route Delete & DELETE /api/routes/:id with another user's route ID & 404 Not Found (data isolation enforced) & Pass \\
+    \hline
+    IT10 & Photon API & Search ``Kochi'' via geocoding.js & Array of results with lat/lng coordinates returned & Pass \\
+    \hline
+    IT11 & Photon API & Search with AbortController signal cancellation & Returns null (AbortError handled gracefully) & Pass \\
+    \hline
+    IT12 & Open-Meteo & Fetch weather for Kochi (9.93, 76.27) & Valid temperature (number) and weather code returned & Pass \\
+    \hline
+    IT13 & Overpass Hotels & Search hotels near Kochi coordinates & Non-empty array of named hotel objects & Pass \\
+    \hline
+    IT14 & Overpass Fuel & Search fuel stations near Kochi coordinates & Non-empty array of fuel station objects & Pass \\
+    \hline
+    IT15 & Health Check & GET /api/health & 200 status, ``RouteOptimizer API is running'' message & Pass \\
+    \hline
+\end{longtable}
+
+\section{System and End-to-End Testing}
+System testing evaluates the complete end-to-end journey of a user, from landing on the application to saving an optimized itinerary. These tests simulate real-world usage patterns and validate that all modules work together seamlessly.
+
+\begin{longtable}{|p{1.2cm}|p{2.2cm}|p{4.5cm}|p{3.5cm}|c|}
+    \hline
+    \textbf{Test ID} & \textbf{Scenario} & \textbf{Test Description} & \textbf{Expected Result} & \textbf{Status} \\
+    \hline
+    \endfirsthead
+    \hline
+    \textbf{Test ID} & \textbf{Scenario} & \textbf{Test Description} & \textbf{Expected Result} & \textbf{Status} \\
+    \hline
+    \endhead
+    \hline
+    \endfoot
+    \hline
+    \caption{System and End-to-End Test Cases} \label{tab:system_tests} \\
+    \endlastfoot
+
+    ST01 & Full Workflow & Register, add 5 stops, optimize, view weather and places, save route & Complete workflow executes without errors & Pass \\
+    \hline
+    ST02 & Auth Guard & Navigate to Dashboard URL without logging in & Redirect to Login page & Pass \\
+    \hline
+    ST03 & Trip Reload & Save a route, log out, log back in, open Trip Dashboard & Previously saved route appears in the list & Pass \\
+    \hline
+    ST04 & Route Deletion & Save a route, delete it from Trip Dashboard & Route no longer appears in the list & Pass \\
+    \hline
+    ST05 & Session Expiry & Use expired JWT (older than 7 days) to access /api/routes & 401 Unauthorized response, redirect to login & Pass \\
+    \hline
+    ST06 & Multi-User & Create two users, each saves a route, verify routes do not cross-leak & Each user only sees their own routes & Pass \\
+    \hline
+    ST07 & Error Recovery & Disconnect internet, attempt weather fetch, reconnect, retry & Graceful error on disconnect; successful retry on reconnect & Pass \\
+    \hline
+    ST08 & Edge Case & Optimize a route with only 2 stops & Valid optimized route returned with distance calculated & Pass \\
+    \hline
+\end{longtable}
+
+\section{Performance Testing}
+Performance testing ensures the application remains fast and responsive under various conditions. The following benchmarks were evaluated:
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{|p{1.2cm}|p{2.5cm}|p{4cm}|p{3cm}|c|}
+        \hline
+        \textbf{Test ID} & \textbf{Metric} & \textbf{Test Description} & \textbf{Expected Result} & \textbf{Status} \\
+        \hline
+        PT01 & Initial Load & Time for landing page to become fully interactive & Under 2 seconds on 4G connection & Pass \\
+        \hline
+        PT02 & Geocoding Latency & Response time for Photon API autocomplete query & Under 500ms per request & Pass \\
+        \hline
+        PT03 & Optimization Speed & Time to optimize 10 stops using Nearest Neighbor & Under 50ms (client-side computation) & Pass \\
+        \hline
+        PT04 & Optimization Speed & Time to optimize 20 stops using Nearest Neighbor & Under 200ms (client-side computation) & Pass \\
+        \hline
+        PT05 & Enrichment Latency & Concurrent weather + places fetch for 5 stops & Under 5 seconds total (parallel execution) & Pass \\
+        \hline
+        PT06 & Route Save & Time to persist a route to MongoDB Atlas & Under 500ms (including network round-trip) & Pass \\
+        \hline
+        PT07 & Dashboard Load & Time to fetch and render 20 saved routes & Under 2 seconds & Pass \\
+        \hline
+        PT08 & Bundle Size & Production build size (Vite output) & Under 500 KB gzipped for initial load & Pass \\
+        \hline
+    \end{tabular}
+    \caption{Performance Test Results}
+    \label{tab:perf_tests}
+\end{table}
+
+\section{User Acceptance Testing (UAT)}
+User acceptance testing was conducted with a small group of test users to validate that the application meets real-world expectations and provides a satisfying user experience.
+
+\begin{longtable}{|p{1.2cm}|p{3cm}|p{5cm}|p{2.5cm}|c|}
+    \hline
+    \textbf{Test ID} & \textbf{Acceptance Criteria} & \textbf{Test Scenario} & \textbf{User Feedback} & \textbf{Status} \\
+    \hline
+    \endfirsthead
+    \hline
+    \textbf{Test ID} & \textbf{Acceptance Criteria} & \textbf{Test Scenario} & \textbf{User Feedback} & \textbf{Status} \\
+    \hline
+    \endhead
+    \hline
+    \endfoot
+    \hline
+    \caption{User Acceptance Test Cases} \label{tab:uat_tests} \\
+    \endlastfoot
+
+    UAT01 & Easy Registration & User registers using email and password without issues & Smooth and intuitive & Pass \\
+    \hline
+    UAT02 & Intuitive Search & User finds destinations by typing partial names & Autocomplete is fast and accurate & Pass \\
+    \hline
+    UAT03 & Clear Optimization & User understands the reordered route after optimization & Route order makes geographic sense & Pass \\
+    \hline
+    UAT04 & Useful Weather Data & Weather info displayed for each stop is meaningful & Helpful for packing and planning & Pass \\
+    \hline
+    UAT05 & Hotel Discovery & Nearby hotels are relevant to each destination & Good coverage in urban areas & Pass \\
+    \hline
+    UAT06 & Fuel Planning & Fuel cost estimate matches manual calculation & Accurate and useful & Pass \\
+    \hline
+    UAT07 & Visual Appeal & Overall UI design is professional and engaging & Premium look and feel & Pass \\
+    \hline
+    UAT08 & Trip History & User can save and retrieve past trips reliably & Works as expected & Pass \\
+    \hline
+\end{longtable}
+
+\section{Security Testing}
+Security testing was performed to validate the application's resilience against common web application vulnerabilities:
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \small
+    \begin{tabular}{|p{1.2cm}|p{3cm}|p{4.5cm}|p{3cm}|c|}
+        \hline
+        \textbf{Test ID} & \textbf{Vulnerability} & \textbf{Test Description} & \textbf{Expected Result} & \textbf{Status} \\
+        \hline
+        SEC01 & Password Storage & Verify passwords are not stored in plain text in MongoDB & bcrypt hash stored (starts with \$2a\$) & Pass \\
+        \hline
+        SEC02 & JWT Tampering & Modify JWT payload and send to protected endpoint & 401 Unauthorized (signature verification fails) & Pass \\
+        \hline
+        SEC03 & SQL/NoSQL Injection & Send malicious MongoDB operators in login fields & Input sanitized, no data leak & Pass \\
+        \hline
+        SEC04 & CORS Policy & Access API from unauthorized origin & CORS middleware blocks the request & Pass \\
+        \hline
+        SEC05 & Route Authorization & Access another user's route by ID guessing & 404 Not Found (filtered by userId) & Pass \\
+        \hline
+    \end{tabular}
+    \caption{Security Test Cases}
+    \label{tab:sec_tests}
+\end{table}

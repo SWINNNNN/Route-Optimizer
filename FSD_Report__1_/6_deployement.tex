@@ -1,0 +1,100 @@
+\chapter{DEPLOYMENT}
+This chapter describes the deployment architecture, environment configuration, and operational considerations for the Route Optimizer platform. The system is deployed as a distributed web application with independently hosted frontend and backend tiers, connected to a cloud-hosted MongoDB database.
+
+\section{Software Architecture Overview}
+The Route Optimizer follows a three-tier distributed architecture where each component is deployed independently, enabling horizontal scaling and independent maintenance.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[node distance=2.5cm, font=\small]
+        % Icons/Boxes
+        \node[draw, rectangle, minimum width=3cm, minimum height=1.8cm, align=center] (client) {Client\\(React + Vite)};
+        \node[draw, rectangle, minimum width=3cm, minimum height=1.8cm, right of=client, node distance=5.5cm, align=center] (server) {Server\\(Express.js)};
+        \node[draw, cylinder, shape border rotate=90, minimum width=2.5cm, minimum height=1.8cm, below of=server, align=center] (db) {MongoDB\\Atlas};
+
+        \node[draw, cloud, minimum width=2.5cm, right of=server, node distance=4.5cm, align=center] (api1) {Open-Meteo\\API};
+        \node[draw, cloud, minimum width=2.5cm, below of=api1, align=center] (api2) {Overpass\\API};
+        \node[draw, cloud, minimum width=2.5cm, above of=api1, align=center] (api3) {Photon\\API};
+
+        % Connections with labels
+        \draw[<->, thick] (client) -- node[above] {REST/JSON} (server);
+        \draw[<->, thick] (server) -- (db);
+        \draw[->, thick] (client.north east) -- (api3.west);
+        \draw[->, thick] (client.east) -- (api1.west);
+        \draw[->, thick] (client.south east) -- (api2.west);
+    \end{tikzpicture}
+    \caption{System Architecture and Deployment Model}
+    \label{fig:Architecture}
+\end{figure}
+
+\textbf{Note:} In the Route Optimizer architecture, the external API calls (Photon for geocoding, Open-Meteo for weather, and Overpass for nearby places) are made directly from the client-side browser, not from the Express backend. This design reduces backend load and simplifies the server to handle only authentication and data persistence. The backend communicates exclusively with MongoDB Atlas for user and route data management.
+
+\section{Deployment Environment}
+
+\subsection{Frontend Deployment}
+\begin{itemize}
+    \item \textbf{Build Process:} The React application is compiled into optimized static assets using Vite's production build command (\texttt{npm run build}). Vite performs tree-shaking, code splitting, and minification to produce a compact bundle.
+    \item \textbf{Hosting Platform:} Deployed on Vercel or Netlify, which provide edge-optimized CDN (Content Delivery Network) distribution. Static assets are served from the nearest edge node to the user, ensuring sub-second load times globally.
+    \item \textbf{Environment Variables:} The frontend uses environment variables (via Vite's \texttt{import.meta.env}) to configure the backend API base URL, enabling seamless switching between development (\texttt{localhost:5000}) and production endpoints.
+    \item \textbf{SPA Routing:} The hosting platform is configured to redirect all routes to \texttt{index.html}, enabling React Router to handle client-side navigation without 404 errors on page refresh.
+\end{itemize}
+
+\subsection{Backend Deployment}
+\begin{itemize}
+    \item \textbf{Runtime:} The Express.js server runs on Node.js 18+ in a containerized environment.
+    \item \textbf{Hosting Platform:} Deployed on Render, Railway, or Heroku, which provide managed Node.js hosting with automatic scaling and SSL certificate management.
+    \item \textbf{Environment Variables:} Critical configuration is managed through environment variables:
+    \begin{itemize}
+        \item \texttt{MONGODB\_URI} -- Connection string for MongoDB Atlas cluster
+        \item \texttt{JWT\_SECRET} -- Secret key for signing JWT tokens
+        \item \texttt{PORT} -- Server port (defaults to 5000)
+    \end{itemize}
+    \item \textbf{CORS Configuration:} The \texttt{cors()} middleware is configured to accept requests from the deployed frontend origin, preventing unauthorized cross-origin access.
+    \item \textbf{Health Monitoring:} The \texttt{GET /api/health} endpoint returns a JSON status object, enabling uptime monitoring services (e.g., UptimeRobot) to verify server availability.
+\end{itemize}
+
+\subsection{Database Deployment}
+\begin{itemize}
+    \item \textbf{Service:} MongoDB Atlas provides a fully managed, cloud-hosted database service.
+    \item \textbf{Cluster Tier:} The M0 Sandbox (free tier) provides 512 MB storage, which is sufficient for thousands of saved routes during development and small-scale production.
+    \item \textbf{Region:} Deployed in the nearest cloud region (e.g., AWS Mumbai for Indian users) to minimize latency.
+    \item \textbf{Security:} Network access is restricted to whitelisted IP addresses or CIDR ranges. Database users are created with specific read/write permissions. All connections use TLS/SSL encryption.
+    \item \textbf{Indexing:} The \texttt{routes} collection is indexed on \texttt{userId} for efficient per-user query filtering. The \texttt{users} collection has a unique index on the \texttt{email} field.
+\end{itemize}
+
+\section{Deployment Workflow}
+The deployment follows a streamlined workflow from development to production:
+
+\begin{enumerate}
+    \item \textbf{Local Development:}
+    \begin{itemize}
+        \item Frontend: \texttt{npm run dev} starts the Vite development server with HMR on \texttt{localhost:5173}.
+        \item Backend: \texttt{node server.js} (or \texttt{nodemon server.js} for auto-reload) starts Express on \texttt{localhost:5000}.
+        \item Database: Connected to MongoDB Atlas cloud cluster via the \texttt{MONGODB\_URI} environment variable in a \texttt{.env} file.
+    \end{itemize}
+    \item \textbf{Version Control:}
+    \begin{itemize}
+        \item Code changes are committed to Git with descriptive commit messages.
+        \item The repository is hosted on GitHub with separate directories for Frontend and Backend.
+    \end{itemize}
+    \item \textbf{Production Build:}
+    \begin{itemize}
+        \item Frontend: \texttt{npm run build} generates optimized static files in the \texttt{dist/} directory.
+        \item Backend: No build step required (Node.js runs JavaScript directly).
+    \end{itemize}
+    \item \textbf{Deployment:}
+    \begin{itemize}
+        \item Frontend: Pushing to the main branch triggers automatic deployment on Vercel/Netlify via Git integration.
+        \item Backend: Pushing to the main branch triggers automatic deployment on Render/Railway via Git integration.
+        \item Environment variables are configured through the hosting platform's dashboard (never committed to version control).
+    \end{itemize}
+\end{enumerate}
+
+\section{Security Considerations in Deployment}
+\begin{itemize}
+    \item \textbf{HTTPS:} All hosting platforms provide automatic SSL/TLS certificates, ensuring all data in transit is encrypted.
+    \item \textbf{Environment Secrets:} The JWT secret key and MongoDB connection string are stored as environment variables on the hosting platform, never hardcoded or committed to the repository.
+    \item \textbf{Password Hashing:} bcrypt with 10 salt rounds ensures that stored passwords are computationally expensive to brute-force.
+    \item \textbf{Token Expiry:} JWTs expire after 7 days, limiting the window of exposure if a token is compromised.
+    \item \textbf{Input Validation:} Mongoose schema validation enforces data type constraints and required fields at the database layer, providing defence-in-depth against malformed requests.
+\end{itemize}

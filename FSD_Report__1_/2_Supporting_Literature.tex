@@ -1,0 +1,84 @@
+\chapter{SUPPORTING LITERATURE}
+The development of the Route Optimizer platform is supported by established research in web architecture, geospatial algorithms, API integration patterns, and user experience design. This chapter reviews the key technologies, algorithms, and design philosophies that form the theoretical foundation of the project.
+
+\section{MERN Stack Architecture}
+The MERN stack (MongoDB, Express.js, React, Node.js) has emerged as one of the most widely adopted full-stack JavaScript architectures for modern web applications. Its primary advantage lies in the unified use of JavaScript across all layers of the application, from the database query language to the server-side logic and the client-side user interface.
+
+\subsection{MongoDB and NoSQL Data Modeling}
+MongoDB is a document-oriented NoSQL database that stores data in flexible BSON (Binary JSON) documents rather than rigid relational tables. This schema flexibility is particularly advantageous for applications like Route Optimizer, where travel data varies significantly between itineraries. A saved route may contain varying numbers of stops, each with different metadata (weather conditions, nearby places, user notes). The document model accommodates this variability naturally, without requiring schema migrations or complex JOIN operations that would be necessary in a relational database system.
+
+MongoDB Atlas, the cloud-hosted version of MongoDB, provides additional benefits including automated backups, built-in security features, and horizontal scalability through sharding. For Route Optimizer, Atlas eliminates the need for self-managed database infrastructure while providing production-grade reliability.
+
+\subsection{Express.js as a RESTful Middleware}
+Express.js is a minimal and flexible Node.js web application framework that provides a robust set of features for building RESTful APIs. In the context of Route Optimizer, Express.js serves as the middleware layer that handles HTTP request routing, input validation, authentication middleware chaining, and error handling. Its middleware architecture allows for clean separation of cross-cutting concerns such as CORS (Cross-Origin Resource Sharing) configuration and JSON body parsing from business logic.
+
+\subsection{React and Component-Based Architecture}
+React, developed by Meta (formerly Facebook), is a declarative, component-based JavaScript library for building user interfaces. Its virtual DOM (Document Object Model) mechanism enables efficient updates to the user interface by computing the minimal set of changes required, making it ideal for data-intensive applications that require frequent re-rendering. React's unidirectional data flow and state management patterns (using hooks such as \texttt{useState}, \texttt{useEffect}, and \texttt{useContext}) promote predictable application behavior, which is critical for complex interfaces like the Route Optimizer dashboard.
+
+\subsection{Node.js and Event-Driven Architecture}
+Node.js provides the server-side runtime environment built on Google Chrome's V8 JavaScript engine. Its event-driven, non-blocking I/O model makes it particularly well-suited for I/O-intensive applications that need to handle multiple concurrent API calls---a core requirement for Route Optimizer, which fetches data from weather, geocoding, and places APIs simultaneously. The npm (Node Package Manager) ecosystem provides access to hundreds of thousands of open-source packages, accelerating development significantly.
+
+\section{Route Optimization Algorithms}
+The Traveling Salesperson Problem (TSP) is a classic NP-hard optimization problem in combinatorial mathematics and computer science. Given a set of cities and the distances between each pair, the problem asks for the shortest possible route that visits each city exactly once and optionally returns to the origin city. The number of possible routes grows factorially with the number of cities ($n!$ possible permutations for $n$ cities), making brute-force solutions computationally infeasible for even moderately sized inputs.
+
+\subsection{Nearest Neighbor Heuristic}
+The Nearest Neighbor algorithm is a greedy heuristic for the TSP that provides a near-optimal solution in polynomial time. The algorithm operates as follows:
+\begin{enumerate}
+    \item Start at a designated initial city (the first stop added by the user in Route Optimizer).
+    \item From the current city, find the nearest unvisited city by computing distances to all remaining candidates.
+    \item Move to that nearest city and mark it as visited.
+    \item Repeat steps 2--3 until all cities have been visited.
+\end{enumerate}
+
+The time complexity of this algorithm is $O(n^2)$, where $n$ is the number of stops, making it computationally efficient for real-time, client-side execution. While the Nearest Neighbor heuristic does not guarantee a globally optimal solution (its worst-case approximation ratio is $O(\log n)$ compared to the optimal tour), it consistently produces routes that are within 20--25\% of optimal for typical travel planning scenarios, which is more than acceptable for leisure road trip planning.
+
+\subsection{Haversine Formula for Great-Circle Distance}
+The Haversine formula calculates the great-circle distance between two points on a sphere given their latitudes and longitudes. Unlike Euclidean distance calculations, the Haversine formula accounts for the curvature of the Earth, providing accurate distance measurements that are essential for long-distance travel planning.
+
+The formula is given by:
+\[
+a = \sin^2\left(\frac{\Delta\phi}{2}\right) + \cos(\phi_1) \cdot \cos(\phi_2) \cdot \sin^2\left(\frac{\Delta\lambda}{2}\right)
+\]
+\[
+c = 2 \cdot \text{atan2}\left(\sqrt{a}, \sqrt{1-a}\right)
+\]
+\[
+d = R \cdot c
+\]
+
+where $\phi_1$ and $\phi_2$ are the latitudes of the two points, $\Delta\phi$ is the difference in latitudes, $\Delta\lambda$ is the difference in longitudes, $R$ is the Earth's mean radius (6,371 km), and $d$ is the distance between the two points. This formula is implemented in the \texttt{optimizer.js} utility module of Route Optimizer, where it serves as the distance metric for the Nearest Neighbor algorithm.
+
+\section{API Integration in Modern Travel Applications}
+Modern travel platforms rely on distributed data sources accessed through Application Programming Interfaces (APIs). The microservice-oriented architecture of the web has made it possible to compose rich applications by integrating specialized third-party services, each optimized for a specific data domain.
+
+\subsection{Photon Geocoding API (Komoot)}
+Geocoding is the process of converting a human-readable location name (e.g., ``Kochi, Kerala'') into geographic coordinates (latitude and longitude). Route Optimizer uses the Photon API, an open-source geocoding service powered by OpenStreetMap data and maintained by Komoot. Photon provides fast, free, and privacy-respecting geocoding without requiring API keys or authentication, making it ideal for open-source projects. The API supports autocomplete-style queries, returning up to 15 results per request with structured address components (name, street, city, state, country).
+
+\subsection{Open-Meteo Forecast API}
+The Open-Meteo API provides high-resolution weather forecasts sourced from national meteorological services worldwide. It offers current weather conditions, hourly forecasts, and daily summaries without requiring API keys for non-commercial use. Route Optimizer utilizes the current weather endpoint to fetch the temperature (\texttt{temperature\_2m}) and WMO weather interpretation code (\texttt{weather\_code}) for each destination. The WMO codes are mapped to human-readable descriptions (e.g., code 0 = ``Clear sky'', code 61 = ``Slight rain'') and corresponding weather emojis within the application's \texttt{weather.js} utility module.
+
+\subsection{Overpass API (OpenStreetMap)}
+The Overpass API is a read-only API for querying OpenStreetMap (OSM) data using the Overpass Query Language (Overpass QL). Unlike the standard OSM API, the Overpass API supports complex spatial queries such as ``find all hotels within 10 km of a given coordinate.'' Route Optimizer uses Overpass QL to construct radius-based queries that search for:
+\begin{itemize}
+    \item \textbf{Accommodation:} Nodes, ways, and relations tagged with \texttt{tourism=hotel|hostel|guest\_house|apartment|motel} or \texttt{amenity=hotel|hostel} within a 10 km radius.
+    \item \textbf{Fuel Stations:} Nodes, ways, and relations tagged with \texttt{amenity=fuel} within a 15 km radius.
+\end{itemize}
+This dual-tag query approach ensures comprehensive coverage across different regional tagging conventions used by OSM contributors worldwide.
+
+\section{Authentication and Security in Web Applications}
+Securing user data is a critical requirement for any application that stores personal information. Route Optimizer implements industry-standard security practices for authentication and session management.
+
+\subsection{bcrypt Password Hashing}
+Storing passwords in plain text is a fundamental security vulnerability. Route Optimizer uses the bcrypt algorithm, an adaptive cryptographic hash function designed specifically for password hashing. bcrypt incorporates a ``salt''---a random string appended to the password before hashing---to protect against rainbow table attacks. The algorithm's configurable ``cost factor'' (set to 10 salt rounds in Route Optimizer) determines the computational expense of generating the hash, making brute-force attacks progressively more expensive as hardware improves.
+
+\subsection{JSON Web Tokens (JWT)}
+JWT is an open standard (RFC 7519) for securely transmitting information between parties as a JSON object. Route Optimizer generates a JWT upon successful authentication, encoding the user's ID, name, and email into the token payload. The token is signed using a server-side secret key and configured with a 7-day expiration period. Subsequent API requests include this token in the Authorization header, allowing the server to verify the user's identity without maintaining server-side session state, thus enabling a stateless authentication architecture.
+
+\section{User Interface Design Principles}
+The visual design of Route Optimizer draws from contemporary web design trends to create an interface that is both functional and visually compelling.
+
+\subsection{Glassmorphism}
+Glassmorphism is a modern UI design trend characterized by translucent, frosted-glass effects achieved through CSS \texttt{backdrop-filter: blur()} properties. This technique creates a sense of depth and hierarchy by allowing background elements (such as animated gradient ``blobs'') to be partially visible through functional panels and containers. The result is a premium, layered aesthetic that distinguishes the application from flat or material design interfaces.
+
+\subsection{Micro-Interactions and Animation}
+Micro-interactions are subtle animations triggered by user actions (hover, click, focus) that provide visual feedback and enhance the perception of responsiveness. Route Optimizer employs scale transformations on buttons and cards, jiggle animations on interactive icons (using the Lucide-React icon library), and smooth transition effects on panel switches. These animations contribute to an immersive experience that keeps users engaged during the planning process.
