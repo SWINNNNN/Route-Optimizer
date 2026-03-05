@@ -21,8 +21,12 @@ const Login = () => {
         setLoading(true);
 
         try {
-            await login(email, password);
-            navigate('/');
+            const loggedInUser = await login(email, password);
+            if (loggedInUser.role === 'admin') {
+                navigate('/admin/dashboard');
+            } else {
+                navigate('/');
+            }
         } catch (err) {
             setError(err.message || 'Failed to login. Please try again.');
         } finally {
