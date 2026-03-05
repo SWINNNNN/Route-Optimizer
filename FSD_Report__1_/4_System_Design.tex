@@ -245,6 +245,34 @@ The following Use Case diagram illustrates the primary interactions between the 
     \label{fig:Opt_sequence}
 \end{figure}
 
+\subsection{Admin Dashboard Sequence}
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[font=\footnotesize]
+        % Lifelines
+        \node[draw, rectangle] (admin) at (0, 0) {Admin User};
+        \node[draw, rectangle] (fe) at (4, 0) {React Frontend};
+        \node[draw, rectangle] (be) at (8, 0) {Express Backend};
+        \node[draw, rectangle] (db) at (12, 0) {MongoDB Atlas};
+
+        \draw[dashed] (0, -0.5) -- (0, -8);
+        \draw[dashed] (4, -0.5) -- (4, -8);
+        \draw[dashed] (8, -0.5) -- (8, -8);
+        \draw[dashed] (12, -0.5) -- (12, -8);
+
+        % Messages
+        \draw[->, thick] (0, -1) -- node[above, font=\tiny] {Navigates to /admin/dashboard} (4, -1);
+        \draw[->, thick] (4, -2) -- node[above, font=\tiny] {GET /api/admin/users \& /routes (with JWT)} (8, -2);
+        \draw[->, thick] (8, -3) -- node[above, font=\tiny] {Verify adminAuth Middleware} (8, -3.5);
+        \draw[->, thick] (8, -4) -- node[above, font=\tiny] {Query all users \& routes} (12, -4);
+        \draw[<-, thick] (8, -5) -- node[above, font=\tiny] {Return aggregated documents} (12, -5);
+        \draw[<-, thick] (4, -6) -- node[above, font=\tiny] {Return JSON arrays} (8, -6);
+        \draw[<-, thick] (0, -7) -- node[above, font=\tiny] {Render Admin Tables & Stats} (4, -7);
+    \end{tikzpicture}
+    \caption{Sequence Diagram -- Admin Dashboard Data Flow}
+    \label{fig:Admin_sequence}
+\end{figure}
+
 \section{Database Schema Design}
 The Route Optimizer backend uses MongoDB with Mongoose ODM for data modeling. Two primary collections are used:
 
@@ -353,6 +381,10 @@ The backend exposes a RESTful API organized into two route groups:
         \hline
         DELETE & /api/routes/:id & Yes (JWT) & Delete a specific saved route \\
         \hline
+        GET & /api/admin/users & Yes (Admin JWT) & Fetch all registered users \\
+        \hline
+        GET & /api/admin/routes & Yes (Admin JWT) & Fetch all created routes globally \\
+        \hline
         GET & /api/health & No & Server health check \\
         \hline
     \end{tabular}
@@ -435,6 +467,16 @@ The ``Insights'' tab provides a high-level summary of the user's travel history.
     \includegraphics[width=\textwidth]{screenshots/Insights.png}
     \caption{Trip Insights and Statistics Panel}
     \label{fig:ss_insights}
+\end{figure}
+
+\subsubsection{Admin Dashboard}
+The Admin Dashboard is an exclusive, secure interface accessible only to users with the Administrator role. It provides platform-wide oversight, featuring high-level statistics cards (Total Users, Total Routes) and two detailed data tables. The User Management table displays all registered accounts with their respective roles, while the Route Analytics table grants visibility into every itinerary created on the platform, fostering better administrative control.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{screenshots/Admin Dashboard.png} % Replace with actual screenshot path when added
+    \caption{Admin Dashboard -- User Management View}
+    \label{fig:ss_admin_dashboard}
 \end{figure}
 
 \subsection{Component Architecture}

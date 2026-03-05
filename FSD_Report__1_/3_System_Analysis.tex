@@ -9,9 +9,9 @@ This module handles the complete user lifecycle---registration, secure login, an
 \begin{itemize}
     \item \textbf{User Registration (\texttt{POST /api/auth/register}):} Accepts a username, email, and password. The email is enforced as unique (case-insensitive) to prevent duplicate accounts. Passwords must be at least 6 characters long. Upon successful registration, a JWT token is generated and returned immediately, allowing the user to proceed without a separate login step.
     \item \textbf{Password Security:} Before saving to the database, passwords are hashed using bcrypt with 10 salt rounds via a Mongoose \texttt{pre('save')} middleware hook. This ensures that even if the database is compromised, raw passwords are never exposed.
-    \item \textbf{User Login (\texttt{POST /api/auth/login}):} Validates credentials by looking up the user by email and comparing the submitted password against the stored bcrypt hash using the \texttt{comparePassword} instance method on the User model.
-    \item \textbf{JWT Token Generation:} Upon successful authentication, a JWT is generated encoding the user's ID, name, and email with a 7-day expiration. This token is stored client-side and included in the \texttt{Authorization} header of subsequent API requests.
-    \item \textbf{Authentication Middleware:} A reusable middleware function intercepts protected API routes, verifies the JWT signature, and attaches the decoded user information to the request object for downstream use.
+    \item \textbf{User Login (\texttt{POST /api/auth/login}):} Validates credentials by looking up the user by email and comparing the submitted password against the stored bcrypt hash using the \texttt{comparePassword} instance method on the User model. The response includes the user's role, automatically redirecting Admins to their respective dashboard.
+    \item \textbf{JWT Token Generation:} Upon successful authentication, a JWT is generated encoding the user's ID, name, email, and role with a 7-day expiration. This token is stored client-side and included in the \texttt{Authorization} header of subsequent API requests.
+    \item \textbf{Authentication Middleware:} Two middleware functions exist: a standard \texttt{auth} middleware that verifies the JWT for protected user routes, and an \texttt{adminAuth} middleware that strictly verifies the \texttt{admin} role to protect administrative endpoints.
 \end{itemize}
 
 \subsection{Route Planning and Stop Management}
@@ -241,12 +241,20 @@ A registered user is an individual who has created an account through the regist
     \item \textbf{Trip Management:} Can view a history of saved trips, load previous itineraries for review, and delete trips that are no longer needed.
 \end{itemize}
 
+\subsection{Administrator (Admin)}
+An administrator acts as the highest-tier user with specialized access to manage the platform. This actor shares the privileges of a registered user but is granted additional oversight capabilities via the Admin Dashboard:
+\begin{itemize}
+    \item \textbf{Global User Management:} Can view a complete list of all registered users on the platform, including their names, emails, roles, and join dates.
+    \item \textbf{Global Route Analytics:} Can view a comprehensive list of all routes created across the platform, tracking total distance, stops, and their respective creators.
+    \item \textbf{Access Control:} Has exclusive access to the highly secure \texttt{/api/admin/*} endpoints, protected by specialized \texttt{adminAuth} middleware.
+\end{itemize}
+
 \subsection{Anonymous Guest}
 An anonymous guest is a visitor who has not registered or logged in. This actor has limited interaction with the system:
 \begin{itemize}
     \item Can view the landing page with branding, project description, and feature highlights.
     \item Can access the registration and login pages.
-    \item Cannot access the trip planning dashboard or any route-related functionality.
+    \item Cannot access the trip planning dashboard, Admin Dashboard, or any route-related functionality.
     \item Is redirected to the login page if attempting to access protected routes.
 \end{itemize}
 
