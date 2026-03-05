@@ -77,14 +77,14 @@ sequenceDiagram
     autonumber
     actor User
     participant App as React Frontend
-    participant Opt as Optimizer Engine
+    participant Engine as Optimizer Engine
     participant API as External APIs
     
     User->>App: Clicks "Optimize Route"
-    App->>Opt: Passes List of Stops
-    note right of Opt: Calculates Haversine distances<br/>between all stops
-    Opt->>Opt: Applies Nearest Neighbor Algorithm
-    Opt-->>App: Returns Reordered Stops
+    App->>Engine: Passes List of Stops
+    note right of Engine: Calculates Haversine distances<br/>between all stops
+    Engine->>Engine: Applies Nearest Neighbor Algorithm
+    Engine-->>App: Returns Reordered Stops
     
     par Data Enrichment
         App->>API: Fetch Weather (Open-Meteo)
